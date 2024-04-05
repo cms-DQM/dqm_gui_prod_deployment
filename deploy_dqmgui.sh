@@ -21,6 +21,10 @@ set -ex
 # Main directory we're installing into.
 INSTALLATION_DIR=/data/srv
 
+# Default value set for each step flag. Set this to 0 to skip all steps.
+# This helps if you want to only run only a few steps of the installation only.
+EXECUTE_ALL_STEPS=1
+
 # This scipt's directory
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 
@@ -555,14 +559,6 @@ declare -a installation_steps=(preliminary_checks
     clean_acrontab
     install_acrontab)
 
-# Create dynamic flags to selectively disable/enable steps of the installation
-# Those flags are named "do_" with the name of the function, e.g. "do_install_yui" for
-# the "install_yui" step and "do_check_dependencies" for "check_dependencies".
-# We set those flags to 1 by default.
-for step in "${installation_steps[@]}"; do
-    eval "do_${step}=1"
-done
-
 # Parse command line arguments -- use <key>=<value> to override the flags mentioned above.
 # e.g. do_install_yui=0
 for ARGUMENT in "$@"; do
@@ -570,6 +566,20 @@ for ARGUMENT in "$@"; do
     KEY_LENGTH=${#KEY}
     VALUE="${ARGUMENT:$KEY_LENGTH+1}"
     eval "$KEY=$VALUE"
+done
+
+# Create dynamic flags to selectively disable/enable steps of the installation
+# Those flags are named "do_" with the name of the function, e.g. "do_install_yui" for
+# the "install_yui" step and "do_check_dependencies" for "check_dependencies".
+# We set those flags to the value of EXECUTE_ALL_STEPS by default.
+for step in "${installation_steps[@]}"; do
+    flag_name="do_${step}"
+    if [ -z "${!flag_name}" ]; then
+        echo "${flag_name} not defined"
+        eval "do_${step}=$EXECUTE_ALL_STEPS"
+    else
+        echo "${flag_name} defined and is ${!flag_name}"
+    fi
 done
 
 ## Internal temporary paths

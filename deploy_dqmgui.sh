@@ -35,6 +35,18 @@ source $SCRIPT_DIR/config.sh
 
 TMP_BASE_PATH=/tmp
 
+# Function to sanitize args to a folder name
+# From here: https://stackoverflow.com/a/44811468/6562491
+# echoes "null" if no input given.
+_sanitize_string() {
+    local s="${*:-null}"     # receive input in first argument
+    s="${s//[^[:alnum:]]/-}" # replace all non-alnum characters to -
+    s="${s//+(-)/-}"         # convert multiple - to single -
+    s="${s/#-/}"             # remove - from start
+    s="${s/%-/}"             # remove - from end
+    echo "${s,,}"            # convert to lowercase
+}
+
 # Preliminary checks to do before installing the GUI
 preliminary_checks() {
     # Make sure we don't have superuser privileges
@@ -434,7 +446,7 @@ compile_dqmgui() {
 # we can do right now, considering the existing mess.
 install_dqmgui() {
     # Activate ROOT, we need it to be available so that we can run root-config later
-    source "$INSTALLATION_DIR/root/bin/thisroot.sh"
+    source "$ROOT_INSTALLATION_DIR/bin/thisroot.sh"
 
     # Temporary directory to clone GUI into
     tar -xzf "$SCRIPT_DIR/dqmgui/dqmgui.tar.gz" -C "${TMP_BASE_PATH}"
@@ -499,7 +511,8 @@ install_jsroot() {
 
 # Extract the ROOT tar to a tmp folder for compilation
 install_root() {
-    tar -xzf "$SCRIPT_DIR/root/root.tar.gz" -C "${TMP_BASE_PATH}"
+    mkdir -p $ROOT_TMP_DIR
+    tar -xzf "$SCRIPT_DIR/root/root.tar.gz" -C "${ROOT_TMP_DIR}"
     #if [ -d $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/root ]; then
     #	rm -rf $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/root
     #fi
@@ -519,7 +532,7 @@ compile_root() {
     fi
     mkdir -p $ROOT_TMP_BUILD_DIR
     cd $ROOT_TMP_BUILD_DIR
-    cmake -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALLATION_DIR $ROOT_TMP_DIR -DPYTHON_EXECUTABLE="$(which python${PYTHON_VERSION})" -Dtesting=OFF -Dbuiltin_gtest=OFF -Dclad=OFF 
+    cmake -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALLATION_DIR $ROOT_TMP_DIR -DPYTHON_EXECUTABLE="$(which python${PYTHON_VERSION})" -Dtesting=OFF -Dbuiltin_gtest=OFF -Dclad=OFF
     cmake --build . --target install -j $(nproc)
     cd $INSTALLATION_DIR
     rm -rf $ROOT_TMP_DIR $ROOT_TMP_BUILD_DIR
@@ -583,15 +596,15 @@ for step in "${installation_steps[@]}"; do
 done
 
 ## Internal temporary paths
-ROOT_TMP_DIR="${TMP_BASE_PATH}/root"
-ROOT_TMP_BUILD_DIR="${TMP_BASE_PATH}/root_build"
+ROOT_TMP_DIR="${TMP_BASE_PATH}/root/$(_sanitize_string $ROOT_GIT_TAG)"
+ROOT_TMP_BUILD_DIR="${TMP_BASE_PATH}/$(_sanitize_string $ROOT_GIT_TAG)/root_build"
 ROTOGLUP_TMP_DIR="${TMP_BASE_PATH}/rotoglup"
 CLASSLIB_TMP_DIR="${TMP_BASE_PATH}/classlib-3.1.3"
 DMWM_TMP_DIR="${TMP_BASE_PATH}/dmwm"
 NUMERIC_TMP_DIR="${TMP_BASE_PATH}/numeric"
 DQMGUI_TMP_DIR="${TMP_BASE_PATH}/dqmgui"
 # Where ROOT will be installed
-ROOT_INSTALLATION_DIR="$INSTALLATION_DIR/root"
+ROOT_INSTALLATION_DIR="$INSTALLATION_DIR/root/$(_sanitize_string $ROOT_GIT_TAG)"
 # Cleanup if interrupted
 trap _cleanup SIGINT
 

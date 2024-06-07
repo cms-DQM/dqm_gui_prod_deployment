@@ -15,8 +15,11 @@
 #
 # Contact: cms-dqm-coreteam@cern.ch
 
-# Stop at any non-zero return and display all commands.
-set -ex
+# Stop at any non-zero return
+set -e
+
+# Enable verbose logging
+VERBOSE_LOGGING=0
 
 # Main directory we're installing into.
 INSTALLATION_DIR=/data/srv
@@ -24,6 +27,14 @@ INSTALLATION_DIR=/data/srv
 # Default value set for each step flag. Set this to 0 to skip all steps.
 # This helps if you want to only run only a few steps of the installation only.
 EXECUTE_ALL_STEPS=1
+
+#
+declare -A SPECIAL_HOSTS=(
+    ["vocms0730"]="dev"
+    ["vocms0731"]="dev"
+    ["vocms0738"]="offline"
+    ["vocms0739"]="relval"
+)
 
 # This scipt's directory
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
@@ -49,40 +60,32 @@ _sanitize_string() {
 
 # Preliminary checks to do before installing the GUI
 preliminary_checks() {
+    # Display all commands if asked to
+    if [ "$VERBOSE_LOGGING" -ne 0 ]; then
+        set -x
+    fi
+
     # Make sure we don't have superuser privileges
     if [ "$(id -u)" -eq 0 ]; then
         echo "This script should not be run with superuser privileges!" 1>&2
         exit 1
     fi
 
-    # Make sure you can only run the script on the DQM servers
-    case $HOSTNAME in
-    dqmsrv-c2a06-07-01 | dqmsrv-c2a06-08-01 | dqmfu-c2b02-46-01 | dpapagia-dev-vm*)
-        echo "Valid DQM GUI server: $HOSTNAME"
-        ;;
-    *)
-        echo "This script must be run on a GUI server" 1>&2
-        exit 1
-        ;;
-    esac
-
     # Stop GUI if already running
-    if [ -f "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui/manage" ] &&
+    if [ -f "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/config/dqmgui/manage" ] &&
         [ -f "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/env.sh" ]; then
         $INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui/manage stop 'I did read documentation'
     fi
 
     # Delete installation (config & sw, does not delete state)
-    if [ -d $INSTALLATION_DIR/$DMWM_GIT_TAG ]; then
+    if [ -d "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}" ]; then
         echo "WARNING: $INSTALLATION_DIR/$DMWM_GIT_TAG exists, deleting contents"
-        rm -rf $INSTALLATION_DIR/$DMWM_GIT_TAG/*
+        rm -rf "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/*"
     fi
-
 }
 
 # Check for needed OS-wide dependencies
 check_dependencies() {
-    pkgs_installed=1
     # Read in the required packages
     _package_list=$(cat "$SCRIPT_DIR/os_packages.txt")
     # Split into array
@@ -91,30 +94,18 @@ check_dependencies() {
     # Instead of doing a 'yum list' per package, it may be faster to just
     # ask all of them at once, and dump to file. Then grep the file.
     echo -n "Getting system packages..."
-    tmp_yum_list="${TMP_BASE_PATH}/yum_list.txt"
-    eval "yum list ${required_packages[*]}" >$tmp_yum_list
+    installed_packages=$(yum list --installed ${required_packages[*]})
     echo "Done"
-
-    # Parse up to "Available Packages", which we don't care about.
-    parse_up_to_line=$(grep -n "Available" $tmp_yum_list | cut -d ':' -f 1)
-    parse_up_to_line=$((parse_up_to_line - 1))
 
     # Look for the package in the installed packages
     for package in "${required_packages[@]}"; do
-        (head -$parse_up_to_line $tmp_yum_list | grep "$package") || pkgs_installed=0
-        if [ $pkgs_installed -eq 0 ]; then
-            break
+        if ! echo $installed_packages | grep -q "$package"; then
+            echo "ERROR: Package $package missing please run: 'sudo yum install ${required_packages[@]}'"
+            exit 1
         fi
     done
 
-    rm $tmp_yum_list
-    if [ $pkgs_installed -eq 0 ]; then
-        echo "ERROR: Package $package missing please run: 'sudo yum install ${required_packages[@]}'"
-        exit 1
-    else
-        echo "INFO: All required packages are installed"
-    fi
-
+    echo "INFO: All required packages are installed"
 }
 
 # Remove existing DQMGUI cronjobs
@@ -127,7 +118,6 @@ clean_crontab() {
 # Install DQMGUI cronjobs
 install_crontab() {
     _create_logrotate_conf
-
     (
         crontab -l # Get existing crontabs
         echo "17 2 * * * $INSTALLATION_DIR/current/config/dqmgui/daily"
@@ -137,14 +127,36 @@ install_crontab() {
     ) | crontab -
 }
 
-# TODO: Clean acrontabs for Offline GUI
+# Clean acrontabs for Offline/RelVal/Dev GUI
 clean_acrontab() {
-    : # Not implemented yet
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}" # TODO: Get flavor
+    if [ -z "$FLAVOR" ]; then
+        echo "INFO: Not a vocms machine, not cleaning acrontabs"
+        return
+    fi
+    klist -s # acrontab needs a kerberos token
+    acrontab -l | grep -Eve " $HOST.*$INSTALLATION_DIR/current/config/dqmgui/" | acrontab
 }
 
-# TODO: Install acrontabs for Offline GUI
+# Install acrontabs for Offline/RelVal/Dev GUI
 install_acrontab() {
-    : # Not implemented yet
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}" # TODO: Get flavor
+    if [ -z "$FLAVOR" ]; then
+        echo "INFO: Not a vocms machine, not installing acrontabs"
+        return
+    fi
+    klist -s # acrontab needs a kerberos token
+    (
+        acrontab -l # Get existing crontabs
+        # backup of the index
+        echo "0 7 * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage indexbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Index Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorindexbackup-$HOST.log cmsweb-operator@cern.ch; fi"
+        # backup of the zipped root files
+        echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage zipbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackup-$HOST.log cmsweb-operator@cern.ch; fi"
+        # check/verification HOST the backup of the zipped root files
+        echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/ zipbackupcheck 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup Check, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackupcheck-$HOST.log cmsweb-operator@cern.ch; fi"
+        # Monitor index size
+        echo "0 6 * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage indexmonitor 'I did read documentation'"
+    ) | acrontab
 }
 # Create necessary directories for installation
 create_directories() {
@@ -165,6 +177,10 @@ create_directories() {
         dirname="$INSTALLATION_DIR/state/dqmgui/$subdir"
         echo "DEBUG: Creating subdirectory $dirname"
         mkdir -p "$dirname"
+        if [ -f "$INSTALLATION_DIR/state/dqmgui/$subdir" ]; then
+            echo "INFO: Removing blacklist.txt"
+            rm "$INSTALLATION_DIR/state/dqmgui/$subdir/blacklist.txt"
+        fi
         # Log dirs
         dirname="$INSTALLATION_DIR/logs/dqmgui/$subdir"
         echo "DEBUG: Creating subdirectory $dirname"
@@ -359,10 +375,6 @@ _create_python_venv() {
     # Now use the new venv's python
     python_venv_exe=$python_venv_dir/bin/python
 
-    # Needed for specifying the PYTHONPATH later
-    # PYTHON_VERSION=$($python_exe --version | cut -d ' ' -f 2 | cut -d '.' -f 1,2)
-    # export PYTHON_VERSION
-
     PYTHON_LIB_DIR_NAME=lib/python$PYTHON_VERSION/site-packages
     export PYTHON_LIB_DIR_NAME
 
@@ -481,8 +493,6 @@ install_dqmgui() {
     # Dynamic parametrization of the makefile, i.e. paths required
     # during the compilation procedure.
     _create_makefile_ext
-
-    # TODO: find more info on blacklist.txt file
 }
 
 # Javascript library
@@ -513,11 +523,6 @@ install_jsroot() {
 install_root() {
     mkdir -p $ROOT_TMP_DIR
     tar -xzf "$SCRIPT_DIR/root/root.tar.gz" -C "${ROOT_TMP_DIR}"
-    #if [ -d $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/root ]; then
-    #	rm -rf $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/root
-    #fi
-    #
-    #cp -r /tmp/root $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/root
 }
 
 compile_root() {
@@ -532,7 +537,7 @@ compile_root() {
     fi
     mkdir -p $ROOT_TMP_BUILD_DIR
     cd $ROOT_TMP_BUILD_DIR
-    cmake -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALLATION_DIR $ROOT_TMP_DIR -DPYTHON_EXECUTABLE="$(which python${PYTHON_VERSION})" -Dtesting=OFF -Dbuiltin_gtest=OFF -Dclad=OFF
+    cmake -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALLATION_DIR $ROOT_TMP_DIR/root -DPYTHON_EXECUTABLE="$(which python${PYTHON_VERSION})" -Dtesting=OFF -Dbuiltin_gtest=OFF -Dclad=OFF
     cmake --build . --target install -j $(nproc)
     cd $INSTALLATION_DIR
     rm -rf $ROOT_TMP_DIR $ROOT_TMP_BUILD_DIR
@@ -597,7 +602,7 @@ done
 
 ## Internal temporary paths
 ROOT_TMP_DIR="${TMP_BASE_PATH}/root/$(_sanitize_string $ROOT_GIT_TAG)"
-ROOT_TMP_BUILD_DIR="${TMP_BASE_PATH}/$(_sanitize_string $ROOT_GIT_TAG)/root_build"
+ROOT_TMP_BUILD_DIR="${TMP_BASE_PATH}/root_build/$(_sanitize_string $ROOT_GIT_TAG)"
 ROTOGLUP_TMP_DIR="${TMP_BASE_PATH}/rotoglup"
 CLASSLIB_TMP_DIR="${TMP_BASE_PATH}/classlib-3.1.3"
 DMWM_TMP_DIR="${TMP_BASE_PATH}/dmwm"

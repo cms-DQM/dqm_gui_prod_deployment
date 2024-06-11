@@ -610,6 +610,8 @@ NUMERIC_TMP_DIR="${TMP_BASE_PATH}/numeric"
 DQMGUI_TMP_DIR="${TMP_BASE_PATH}/dqmgui"
 # Where ROOT will be installed
 ROOT_INSTALLATION_DIR="$INSTALLATION_DIR/root/$(_sanitize_string $ROOT_GIT_TAG)"
+HOST=$(hostname -s | tr '[:upper:]' '[:lower:]')
+
 # Cleanup if interrupted
 trap _cleanup SIGINT
 

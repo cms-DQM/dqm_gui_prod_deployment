@@ -115,7 +115,7 @@ _clean_crontab_vocms() {
         echo "INFO: Not a vocms machine, not cleaning vocms crontabs"
         return
     fi
-    crontab -l 2>/dev/null | grep -v "$INSTALLATION_DIR/current/config/admin/kinit.sh" | crontab -
+    crontab -l 2>/dev/null | grep -v "$INSTALLATION_DIR/current/config/dqmgui/kinit.sh" | crontab -
 }
 
 # Remove existing DQMGUI cronjobs
@@ -135,8 +135,8 @@ _install_crontab_vocms() {
     (
         crontab -l # Get existing crontabs
         # Adding kinit script for EOS
-        echo "*/6 * * * * $INSTALLATION_DIR/current/config/admin/kinit.sh"
-        echo "@reboot $INSTALLATION_DIR/current/config/admin/kinit.sh"
+        echo "*/6 * * * * $INSTALLATION_DIR/current/config/dqmgui/kinit.sh"
+        echo "@reboot $INSTALLATION_DIR/current/config/dqmgui/kinit.sh"
     ) | crontab -
 }
 
@@ -334,7 +334,6 @@ install_dmwm() {
     # Move dqmgui-related scripts from DMWM to the config folder
     rm -rf "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui"                    # Cleanup dir if exists
     mv "$DMWM_TMP_DIR/dqmgui" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui" # DQMGUI Layouts
-    mv "$DMWM_TMP_DIR/admin" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/admin"   # Needed for kinit.sh
     rm -rf $DMWM_TMP_DIR
 }
 

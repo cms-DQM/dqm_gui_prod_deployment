@@ -108,11 +108,36 @@ check_dependencies() {
     echo "INFO: All required packages are installed"
 }
 
+# Clean VOCMS-specific crontabs
+_clean_crontab_vocms() {
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
+    if [ -z "$FLAVOR" ]; then
+        echo "INFO: Not a vocms machine, not cleaning vocms crontabs"
+        return
+    fi
+    crontab -l 2>/dev/null | grep -v "$INSTALLATION_DIR/current/config/admin/kinit.sh" | crontab -
+}
+
 # Remove existing DQMGUI cronjobs
 clean_crontab() {
     # Filter cronjobs starting in $INSTALLATION_DIR/current/dqmgui and
     # replace crontabs
     crontab -l 2>/dev/null | grep -v "HOME=/tmp" | grep -v "$INSTALLATION_DIR/current/config/dqmgui" | grep -vE "$INSTALLATION_DIR/current.+logrotate.conf" | crontab -
+}
+
+# Crontabs specific to VOCMS
+_install_crontab_vocms() {
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
+    if [ -z "$FLAVOR" ]; then
+        echo "INFO: Not a vocms machine, not installing vocms crontabs"
+        return
+    fi
+    (
+        crontab -l # Get existing crontabs
+        # Adding kinit script for EOS
+        echo "*/6 * * * * $INSTALLATION_DIR/current/config/admin/kinit.sh"
+        echo "@reboot $INSTALLATION_DIR/current/config/admin/kinit.sh"
+    ) | crontab -
 }
 
 # Install DQMGUI cronjobs
@@ -125,11 +150,12 @@ install_crontab() {
         echo "HOME=/tmp" # Workaround for P5, where the home dir is an NFS mount and isn't immediately available.
         echo "@reboot (sleep 30 && $INSTALLATION_DIR/current/config/dqmgui/manage sysboot)"
     ) | crontab -
+    _install_crontab_vocms
 }
 
 # Clean acrontabs for Offline/RelVal/Dev GUI
 clean_acrontab() {
-    FLAVOR="${SPECIAL_HOSTS[$HOST]}" # TODO: Get flavor
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
     if [ -z "$FLAVOR" ]; then
         echo "INFO: Not a vocms machine, not cleaning acrontabs"
         return
@@ -306,8 +332,9 @@ extract_dmwm() {
 
 install_dmwm() {
     # Move dqmgui-related scripts from DMWM to the config folder
-    rm -rf "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui" # Cleanup dir if exists
-    mv "$DMWM_TMP_DIR/dqmgui" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui"
+    rm -rf "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui"                    # Cleanup dir if exists
+    mv "$DMWM_TMP_DIR/dqmgui" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui" # DQMGUI Layouts
+    mv "$DMWM_TMP_DIR/admin" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/admin"   # Needed for kinit.sh
     rm -rf $DMWM_TMP_DIR
 }
 

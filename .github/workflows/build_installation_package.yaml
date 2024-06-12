@@ -67,8 +67,11 @@ jobs:
       # without a GitHub account.
       - name: Release
         uses: ncipollo/release-action@v1
+        env:
+          IS_PRERELEASE: ${{ vars.IS_PRERELEASE }}
         with:
           artifacts: "/tmp/dqmgui/dqmgui_${{ env.RELEASE_TAG }}.tar.gz"
           bodyFile: "/tmp/release_body.md"
           tag: ${{ env.RELEASE_TAG }}
+          prerelease: "${{ env.IS_PRERELEASE }}"
           allowUpdates: "true"

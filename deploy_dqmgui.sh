@@ -11,7 +11,7 @@
 # If the target (installation+dmqm tag) directory exists (e.g. /data/srv/$DMWM_GIT_TAG), it will
 # be *DELETED* by the script, before re-installing. The "state" dir is left alone.
 #
-# Required system packages: See check_dependencies().
+# Required system packages: See os_packages.txt which accompanies this script.
 #
 # Contact: cms-dqm-coreteam@cern.ch
 
@@ -166,7 +166,7 @@ clean_acrontab() {
 
 # Install acrontabs for Offline/RelVal/Dev GUI
 install_acrontab() {
-    FLAVOR="${SPECIAL_HOSTS[$HOST]}" # TODO: Get flavor
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
     if [ -z "$FLAVOR" ]; then
         echo "INFO: Not a vocms machine, not installing acrontabs"
         return
@@ -330,10 +330,23 @@ extract_dmwm() {
     tar -xzf "$SCRIPT_DIR/dmwm/dmwm.tar.gz" -C "${TMP_BASE_PATH}"
 }
 
+# Update the keytab path in kinit.sh. This only applies for VOCMS deployments
+# which require access to EOS and acrontab and, therefore, need to run kinit.
+_update_keytab_path() {
+    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
+    if [ -z "$FLAVOR" ]; then
+        echo "INFO: Not a vocms machine, not updating kinit.sh"
+        return
+    fi
+    echo "INFO: Updating keytab path in file $INSTALLATION_DIR/current/config/dqmgui/kinit.sh"
+    sed -E "s#export\s+keytab.+#export keytab=\"$INSTALLATION_DIR/$DMWM_GIT_TAG/auth/wmcore-auth/keytab\"#" -i "$INSTALLATION_DIR/current/config/dqmgui/kinit.sh"
+}
+
 install_dmwm() {
     # Move dqmgui-related scripts from DMWM to the config folder
     rm -rf "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui"                    # Cleanup dir if exists
     mv "$DMWM_TMP_DIR/dqmgui" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui" # DQMGUI Layouts
+    _update_keytab_path                                                       # Update the kinit.sh script, if applicable, to use the proper keytab file
     rm -rf $DMWM_TMP_DIR
 }
 
@@ -478,7 +491,7 @@ compile_dqmgui() {
     $INSTALLATION_DIR/current/config/dqmgui/manage compile
 }
 
-# Installation procedure of the DQMGUI repository.
+# Installation procedure of the DQMGUI source.
 # Based on recipe I found here: https://github.com/cms-sw/cmsdist/blob/comp_gcc630/dqmgui.spec
 # The resulting directory structure and compiled binaries is a mess, but that's the best
 # we can do right now, considering the existing mess.

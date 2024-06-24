@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/env bash
 #
 # Script intended for installing [legacy] DQMGUI on online HLT machines (dqmsrv-...).
 # It tries to imitate the behavior of the Deploy script without installing external RPMs.
@@ -12,6 +12,8 @@
 # be *DELETED* by the script, before re-installing. The "state" dir is left alone.
 #
 # Required system packages: See os_packages.txt which accompanies this script.
+#
+# Required tools: patch, curl (if patching DMWM directly from github PRs)
 #
 # Contact: cms-dqm-coreteam@cern.ch
 
@@ -46,6 +48,10 @@ source $SCRIPT_DIR/config.sh
 
 TMP_BASE_PATH=/tmp
 
+DMWM_PRS_URL_BASE="https://github.com/dmwm/deployment/pull"
+# Comma-separated DMWM PRs to apply. E.g., 1312,1315
+DMWM_PRS=
+
 # Function to sanitize args to a folder name
 # From here: https://stackoverflow.com/a/44811468/6562491
 # echoes "null" if no input given.
@@ -72,18 +78,47 @@ preliminary_checks() {
     fi
 
     # Stop GUI if already running
-    if [ -f "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/config/dqmgui/manage" ] &&
-        [ -f "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/env.sh" ]; then
-        $INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui/manage stop 'I did read documentation'
+    if [ -f "${INSTALLATION_DIR:?}/current/config/dqmgui/manage" ] &&
+        [ -f "$INSTALLATION_DIR/current/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/env.sh" ]; then
+        $INSTALLATION_DIR/current/config/dqmgui/manage stop 'I did read documentation'
     fi
 
     # Delete installation (config & sw, does not delete state)
     if [ -d "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}" ]; then
-        echo "WARNING: $INSTALLATION_DIR/$DMWM_GIT_TAG exists, deleting contents"
-        rm -rf "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/*"
+        echo "WARNING: $INSTALLATION_DIR/$DMWM_GIT_TAG exists, deleting contents (except auth)"
+        find "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/" -maxdepth 1 -mindepth 1 -type d ! -path . ! -name auth -exec rm -rf {} \;
+    fi
+
+    if [ -n "$DMWM_PRS" ]; then
+        # If there are PRs to apply, check if patch is available locally
+        if ! command -v patch >/dev/null; then
+            echo "ERROR: PRs to apply were specified but the patch command is not available"
+            exit 1
+        fi
+        OLD_IFS=$IFS
+        IFS=','
+        # Split PRs with commas
+        for pr in $DMWM_PRS; do
+            # Each should be a number
+            if ! [[ "$pr" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: $pr is not a valid PR number"
+                exit 1
+            fi
+            # Did not find diff locally, try downloading it
+            if ! _find_patch $pr >/dev/null; then
+                if ! command -v curl >/dev/null; then
+                    echo "ERROR: $pr not available locally and curl is not installed"
+                fi
+                echo "INFO: Did not find $pr diff locally, trying downloading it from $DMWM_PRS_URL_BASE"
+                if ! curl --silent -L "${DMWM_PRS_URL_BASE}/${pr}.diff" >"/tmp/${pr}.diff"; then
+                    echo "ERROR: Could not download diff for PR $pr from $DMWM_PRS_URL_BASE"
+                    exit 1
+                fi
+            fi
+        done
+        IFS=$OLD_IFS
     fi
 }
-
 # Check for needed OS-wide dependencies
 check_dependencies() {
     # Read in the required packages
@@ -146,7 +181,6 @@ install_crontab() {
     (
         crontab -l # Get existing crontabs
         echo "17 2 * * * $INSTALLATION_DIR/current/config/dqmgui/daily"
-        echo "0 3 * * * /usr/sbin/logrotate $INSTALLATION_DIR/current/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/logrotate.conf --state  $INSTALLATION_DIR/state/dqmgui/logrotate.state --verbose --log $INSTALLATION_DIR/logs/dqmgui/logrotate.log"
         echo "HOME=/tmp" # Workaround for P5, where the home dir is an NFS mount and isn't immediately available.
         echo "@reboot (sleep 30 && $INSTALLATION_DIR/current/config/dqmgui/manage sysboot)"
     ) | crontab -
@@ -180,8 +214,6 @@ install_acrontab() {
         echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage zipbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackup-$HOST.log cmsweb-operator@cern.ch; fi"
         # check/verification HOST the backup of the zipped root files
         echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/ zipbackupcheck 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup Check, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackupcheck-$HOST.log cmsweb-operator@cern.ch; fi"
-        # Monitor index size
-        echo "0 6 * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage indexmonitor 'I did read documentation'"
     ) | acrontab
 }
 # Create necessary directories for installation
@@ -309,16 +341,13 @@ install_classlib() {
 install_boost_gil() {
     mkdir -p $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/
     tar -xzf "$SCRIPT_DIR/boost_gil/boost_gil.tar.gz" -C "${TMP_BASE_PATH}"
-
     rm -rf "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/boost" # Cleanup dir if exists
     mv "${TMP_BASE_PATH}/boost_gil/include/boost" "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/boost"
 }
 
 install_gil_numeric() {
-
     tar -xzf "$SCRIPT_DIR/numeric/numeric.tar.gz" -C "${TMP_BASE_PATH}"
     mkdir -p "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/boost/gil/extension/"
-
     rm -rf "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/boost/gil/extension/numeric" # Cleanup dir if exists
     mv "$NUMERIC_TMP_DIR" "$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/src/boost/gil/extension/numeric"
 }
@@ -348,6 +377,44 @@ install_dmwm() {
     mv "$DMWM_TMP_DIR/dqmgui" "$INSTALLATION_DIR/$DMWM_GIT_TAG/config/dqmgui" # DQMGUI Layouts
     _update_keytab_path                                                       # Update the kinit.sh script, if applicable, to use the proper keytab file
     rm -rf $DMWM_TMP_DIR
+}
+
+# Tries to look for a <pr_num>.patch or <pr_num>.diff in /tmp or /globalscratch
+# Returns nothing if it wasn't found.
+_find_patch() {
+    pr_num=${1?}
+    dirs_to_check=("/tmp" "/globalscratch")
+    valid_extensions=(".patch" ".diff")
+    for dir in "${dirs_to_check[@]}"; do
+        for extension in "${valid_extensions[@]}"; do
+            patch_filename="${pr_num}${extension}"
+            patch_filepath="${dir}/${patch_filename}"
+            if [ -f "$patch_filepath" ]; then
+                echo "$patch_filepath"
+                return 0
+            fi
+        done
+    done
+    return 1
+}
+
+# Apply patches to DMWM. Assumes that the patches are available (done during preliminary_checks)
+patch_dmwm() {
+    OLD_IFS=$IFS
+    IFS=','
+    cd $DMWM_TMP_DIR
+    for pr in $DMWM_PRS; do
+        echo "INFO: Looking for the PR $pr patch"
+        patch_filepath="$(_find_patch $pr)"
+        if [ -z "$patch_filepath" ]; then
+            echo "ERROR: Could not find patch for PR $pr"
+            return 1
+        fi
+        echo "INFO: Applying $patch_filepath"
+        patch -p1 <"$patch_filepath"
+    done
+    IFS=$OLD_IFS
+    cd -
 }
 
 # Create a configuration file for logrotate to manage...(surprise!) rotating logs.
@@ -602,6 +669,7 @@ declare -a installation_steps=(preliminary_checks
     install_classlib
     compile_classlib
     extract_dmwm
+    patch_dmwm
     install_dmwm
     install_root
     compile_root

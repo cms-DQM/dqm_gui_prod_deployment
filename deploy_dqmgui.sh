@@ -79,7 +79,7 @@ preliminary_checks() {
 
     # Stop GUI if already running
     if [ -f "${INSTALLATION_DIR:?}/current/config/dqmgui/manage" ] &&
-        [ -f "$INSTALLATION_DIR/current/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/env.sh" ]; then
+        [ -f "$INSTALLATION_DIR/current/apps/dqmgui/128/etc/profile.d/env.sh" ]; then
         $INSTALLATION_DIR/current/config/dqmgui/manage stop 'I did read documentation'
     fi
 

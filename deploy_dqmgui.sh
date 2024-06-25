@@ -449,7 +449,7 @@ export PYTHONPATH=$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/venv/lib/python${PYTHON_VER
 " >"$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/init.sh"
 
     # env.sh contents. This is sourced by the manage script
-    echo ". $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/init.sh
+    echo ". $INSTALLATION_DIR/$DMWM_GIT_TAG/apps/dqmgui/128/etc/profile.d/init.sh
 export YUI_ROOT=$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/yui
 export EXTJS_ROOT=$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/extjs
 export D3_ROOT=$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/d3
@@ -457,8 +457,8 @@ export ROOTJS_ROOT=$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/jsroot
 export MONITOR_ROOT=$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/venv
 export DQMGUI_VERSION='$DQMGUI_GIT_TAG';
 # For pointing to the custom built libraries
-export LD_PRELOAD=\"$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/lib/libDQMGUI.so $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/lib/libclasslib.so\"
-export LD_LIBRARY_PATH=\"$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/lib/:$LD_LIBRARY_PATH\"
+export LD_PRELOAD=\"$INSTALLATION_DIR/$DMWM_GIT_TAG/apps/dqmgui/128/lib/libDQMGUI.so $INSTALLATION_DIR/$DMWM_GIT_TAG/sw/external/lib/libclasslib.so\"
+export LD_LIBRARY_PATH=\"$INSTALLATION_DIR/$DMWM_GIT_TAG/apps/dqmgui/128/lib/:$LD_LIBRARY_PATH\"
 source $ROOT_INSTALLATION_DIR/bin/thisroot.sh
 " >"$INSTALLATION_DIR/$DMWM_GIT_TAG/sw/cms/dqmgui/$DQMGUI_GIT_TAG/128/etc/profile.d/env.sh"
 }

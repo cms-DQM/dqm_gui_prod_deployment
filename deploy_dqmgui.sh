@@ -36,6 +36,8 @@ declare -A SPECIAL_HOSTS=(
     ["vocms0731"]="dev"
     ["vocms0738"]="offline"
     ["vocms0739"]="relval"
+    ["vocmsNEWRELVAL"]="relval"
+    ["vocmsNEWOFFLINE"]="offline"
 )
 
 # This scipt's directory

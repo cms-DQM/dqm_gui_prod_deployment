@@ -77,18 +77,6 @@ preliminary_checks() {
         exit 1
     fi
 
-    # Stop GUI if already running
-    if [ -f "${INSTALLATION_DIR:?}/current/config/dqmgui/manage" ] &&
-        [ -f "$INSTALLATION_DIR/current/apps/dqmgui/128/etc/profile.d/env.sh" ]; then
-        $INSTALLATION_DIR/current/config/dqmgui/manage stop 'I did read documentation'
-    fi
-
-    # Delete installation (config & sw, does not delete state)
-    if [ -d "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}" ]; then
-        echo "WARNING: $INSTALLATION_DIR/$DMWM_GIT_TAG exists, deleting contents (except auth)"
-        find "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/" -maxdepth 1 -mindepth 1 -type d ! -path . ! -name auth -exec rm -rf {} \;
-    fi
-
     if [ -n "$DMWM_PRS" ]; then
         # If there are PRs to apply, check if patch is available locally
         if ! command -v patch >/dev/null; then
@@ -118,6 +106,19 @@ preliminary_checks() {
         done
         IFS=$OLD_IFS
     fi
+
+    # Stop GUI if already running
+    if [ -f "${INSTALLATION_DIR:?}/current/config/dqmgui/manage" ] &&
+        [ -f "$INSTALLATION_DIR/current/apps/dqmgui/128/etc/profile.d/env.sh" ]; then
+        $INSTALLATION_DIR/current/config/dqmgui/manage stop 'I did read documentation'
+    fi
+
+    # Delete installation (config & sw, does not delete state)
+    if [ -d "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}" ]; then
+        echo "WARNING: $INSTALLATION_DIR/$DMWM_GIT_TAG exists, deleting contents (except auth)"
+        find "${INSTALLATION_DIR:?}/${DMWM_GIT_TAG:?}/" -maxdepth 1 -mindepth 1 -type d ! -path . ! -name auth -exec rm -rf {} \;
+    fi
+
 }
 # Check for needed OS-wide dependencies
 check_dependencies() {

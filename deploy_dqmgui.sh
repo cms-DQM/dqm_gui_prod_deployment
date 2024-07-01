@@ -66,7 +66,7 @@ _sanitize_string() {
     echo "${s,,}"            # convert to lowercase
 }
 
-# Preliminary checks to do before installing the GUI
+# oary checks to do before installing the GUI
 preliminary_checks() {
     # Display all commands if asked to
     if [ "$VERBOSE_LOGGING" -ne 0 ]; then
@@ -102,6 +102,7 @@ preliminary_checks() {
                 echo "INFO: Did not find $pr diff locally, trying downloading it from $DMWM_PRS_URL_BASE"
                 if ! curl --silent -L "${DMWM_PRS_URL_BASE}/${pr}.diff" >"/tmp/${pr}.diff"; then
                     echo "ERROR: Could not download diff for PR $pr from $DMWM_PRS_URL_BASE"
+                    rm -rf "/tmp/${pr}.diff"
                     exit 1
                 fi
             fi

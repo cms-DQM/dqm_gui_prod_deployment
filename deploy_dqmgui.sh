@@ -630,6 +630,10 @@ install_jsroot() {
 
 # Extract the ROOT tar to a tmp folder for compilation
 install_root() {
+    if source "$ROOT_INSTALLATION_DIR/bin/thisroot.sh"; then
+        echo "INFO: ROOT installation found, not re-compiling ROOT"
+        return
+    fi
     mkdir -p $ROOT_TMP_DIR
     tar -xzf "$SCRIPT_DIR/root/root.tar.gz" -C "${ROOT_TMP_DIR}"
 }

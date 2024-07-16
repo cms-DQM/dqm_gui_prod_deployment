@@ -159,6 +159,7 @@ _clean_crontab_vocms() {
 
 # Remove existing DQMGUI cronjobs
 clean_crontab() {
+    _clean_crontab_vocms
     # Filter cronjobs starting in $INSTALLATION_DIR/current/dqmgui and
     # replace crontabs
     crontab -l 2>/dev/null | grep -v "HOME=/tmp" | grep -v "$INSTALLATION_DIR/current/config/dqmgui" | grep -vE "$INSTALLATION_DIR/current.+logrotate.conf" | crontab -
@@ -176,6 +177,12 @@ _install_crontab_vocms() {
         # Adding kinit script for EOS
         echo "*/6 * * * * $INSTALLATION_DIR/current/config/dqmgui/kinit.sh"
         echo "@reboot $INSTALLATION_DIR/current/config/dqmgui/kinit.sh"
+        # backup of the index
+        echo "0 7 * * * $INSTALLATION_DIR/current/config/dqmgui/manage indexbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Index Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorindexbackup-$HOST.log cmsweb-operator@cern.ch; fi"
+        # backup of the zipped root files
+        echo "*/15 * * * * $INSTALLATION_DIR/current/config/dqmgui/manage zipbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackup-$HOST.log cmsweb-operator@cern.ch; fi"
+        # check/verification HOST the backup of the zipped root files
+        echo "*/15 * * * * $INSTALLATION_DIR/current/config/dqmgui/manage zipbackupcheck 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup Check, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackupcheck-$HOST.log cmsweb-operator@cern.ch; fi"
     ) | crontab -
 }
 
@@ -191,35 +198,6 @@ install_crontab() {
     _install_crontab_vocms
 }
 
-# Clean acrontabs for Offline/RelVal/Dev GUI
-clean_acrontab() {
-    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
-    if [ -z "$FLAVOR" ]; then
-        echo "INFO: Not a vocms machine, not cleaning acrontabs"
-        return
-    fi
-    klist -s # acrontab needs a kerberos token
-    acrontab -l | grep -Eve " $HOST.*$INSTALLATION_DIR/current/config/dqmgui/" | acrontab
-}
-
-# Install acrontabs for Offline/RelVal/Dev GUI
-install_acrontab() {
-    FLAVOR="${SPECIAL_HOSTS[$HOST]}"
-    if [ -z "$FLAVOR" ]; then
-        echo "INFO: Not a vocms machine, not installing acrontabs"
-        return
-    fi
-    klist -s # acrontab needs a kerberos token
-    (
-        acrontab -l # Get existing crontabs
-        # backup of the index
-        echo "0 7 * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage indexbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Index Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorindexbackup-$HOST.log cmsweb-operator@cern.ch; fi"
-        # backup of the zipped root files
-        echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage zipbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackup-$HOST.log cmsweb-operator@cern.ch; fi"
-        # check/verification HOST the backup of the zipped root files
-        echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage zipbackupcheck 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup Check, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackupcheck-$HOST.log cmsweb-operator@cern.ch; fi"
-    ) | acrontab
-}
 # Create necessary directories for installation
 create_directories() {
     # Dirs to create under INSTALLATION_DIR
@@ -364,7 +342,7 @@ extract_dmwm() {
 }
 
 # Update the keytab path in kinit.sh. This only applies for VOCMS deployments
-# which require access to EOS and acrontab and, therefore, need to run kinit.
+# which require access to EOS, therefore, need to run kinit.
 _update_keytab_path() {
     FLAVOR="${SPECIAL_HOSTS[$HOST]}"
     if [ -z "$FLAVOR" ]; then
@@ -661,7 +639,6 @@ compile_root() {
 function _cleanup() {
     rm -rf $ROOT_TMP_DIR $ROOT_TMP_BUILD_DIR $ROTOGLUP_TMP_DIR $CLASSLIB_TMP_DIR $DMWM_TMP_DIR $NUMERIC_TMP_DIR $DQMGUI_TMP_DIR
     clean_crontab
-    clean_acrontab
 }
 
 ### Main script ###
@@ -688,9 +665,7 @@ declare -a installation_steps=(preliminary_checks
     install_d3
     install_jsroot
     clean_crontab
-    install_crontab
-    clean_acrontab
-    install_acrontab)
+    install_crontab)
 
 # Parse command line arguments -- use <key>=<value> to override the flags mentioned above.
 # e.g. do_install_yui=0

@@ -610,7 +610,7 @@ install_jsroot() {
 # Extract the ROOT tar to a tmp folder for compilation
 install_root() {
     if source "$ROOT_INSTALLATION_DIR/bin/thisroot.sh"; then
-        echo "INFO: ROOT installation found, not re-compiling ROOT"
+        echo "INFO: ROOT installation found, not installing ROOT"
         return
     fi
     mkdir -p $ROOT_TMP_DIR
@@ -618,15 +618,15 @@ install_root() {
 }
 
 compile_root() {
+    if source "$ROOT_INSTALLATION_DIR/bin/thisroot.sh"; then
+        echo "INFO: ROOT installation found, not re-compiling ROOT"
+        return
+    fi
     if [ ! -d $ROOT_TMP_DIR ]; then
         echo "ERROR: ROOT source was not found in $ROOT_TMP_DIR"
         exit 1
     fi
 
-    if source "$ROOT_INSTALLATION_DIR/bin/thisroot.sh"; then
-        echo "INFO: ROOT installation found, not re-compiling ROOT"
-        return
-    fi
     mkdir -p $ROOT_TMP_BUILD_DIR
     cd $ROOT_TMP_BUILD_DIR
     cmake -DCMAKE_INSTALL_PREFIX=$ROOT_INSTALLATION_DIR $ROOT_TMP_DIR/root -DPYTHON_EXECUTABLE="$(which python${PYTHON_VERSION})" -Dtesting=OFF -Dbuiltin_gtest=OFF -Dclad=OFF

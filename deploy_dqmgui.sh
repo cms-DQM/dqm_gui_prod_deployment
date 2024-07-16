@@ -217,7 +217,7 @@ install_acrontab() {
         # backup of the zipped root files
         echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage zipbackup 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackup-$HOST.log cmsweb-operator@cern.ch; fi"
         # check/verification HOST the backup of the zipped root files
-        echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/ zipbackupcheck 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup Check, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackupcheck-$HOST.log cmsweb-operator@cern.ch; fi"
+        echo "*/15 * * * * $HOST $INSTALLATION_DIR/current/config/dqmgui/manage zipbackupcheck 'I did read documentation'; ret=\$?; if [ \$ret -ne 3 ] && [ \$ret -ne 0 ] && [ \$ret -ne 4 ]; then echo Error during backup | mailx -s \"$FLAVOR DQM GUI Zip Backup Check, exit code: \$ret\" -a $INSTALLATION_DIR/logs/dqmgui/$FLAVOR/agent-castorzipbackupcheck-$HOST.log cmsweb-operator@cern.ch; fi"
     ) | acrontab
 }
 # Create necessary directories for installation

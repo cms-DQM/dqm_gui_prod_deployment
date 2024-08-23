@@ -635,6 +635,17 @@ compile_root() {
     rm -rf $ROOT_TMP_DIR $ROOT_TMP_BUILD_DIR
 }
 
+# DQM machines-only functionality, if the local bash function
+# is available
+update_docs() {
+    if [ "$(type -t _update_cmssw_version_in_docs)" = "function" ]; then
+        echo "Updating DQM docs..."
+        prs=$(echo "$DMWM_PRS" | tr ',' ' ')
+        update_cmssw_version_in_docs "python_${PYTHON_VERSION}_deployment_${DMWM_GIT_TAG}_dqmgui_${DQMGUI_GIT_TAG}_root_${ROOT_GIT_TAG}" "$prs"
+        echo "Done"
+    fi
+}
+
 # Cleanup temporary directories, remove cronjobs
 function _cleanup() {
     rm -rf $ROOT_TMP_DIR $ROOT_TMP_BUILD_DIR $ROTOGLUP_TMP_DIR $CLASSLIB_TMP_DIR $DMWM_TMP_DIR $NUMERIC_TMP_DIR $DQMGUI_TMP_DIR
@@ -665,7 +676,8 @@ declare -a installation_steps=(preliminary_checks
     install_d3
     install_jsroot
     clean_crontab
-    install_crontab)
+    install_crontab
+    update_docs)
 
 # Parse command line arguments -- use <key>=<value> to override the flags mentioned above.
 # e.g. do_install_yui=0

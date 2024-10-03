@@ -33,11 +33,8 @@ EXECUTE_ALL_STEPS=1
 #
 declare -A SPECIAL_HOSTS=(
     ["vocms0730"]="dev"
-    ["vocms0731"]="dev"
     ["vocms0736"]="offline"
     ["vocms0737"]="relval"
-    ["vocms0738"]="offline"
-    ["vocms0739"]="relval"
 )
 
 # This scipt's directory

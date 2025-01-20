@@ -1,6 +1,9 @@
 name: Build DQMGUI Installation Package
 
-on: [push]
+on:
+  push:
+  label:
+    types: [created]
 
 jobs:
   build_and_upload:
